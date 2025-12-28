@@ -1,0 +1,11 @@
+# Vulnerable dependencies with known CVEs
+Flask==2.0.1          # CVE-2023-30861 (cookie parsing)
+Werkzeug==2.0.1       # CVE-2023-25577 (path traversal)
+Jinja2==3.0.1         # CVE-2024-22195 (XSS)
+requests==2.25.1      # CVE-2023-32681 (proxy auth leak)
+PyYAML==5.3.1         # CVE-2020-14343 (arbitrary code execution)
+PyJWT==1.7.1          # CVE-2022-29217 (key confusion)
+cryptography==3.3.2   # CVE-2023-23931 (cipher weakness)
+paramiko==2.7.2       # CVE-2022-24302 (race condition)
+urllib3==1.26.4       # CVE-2023-43804 (cookie leak)
+

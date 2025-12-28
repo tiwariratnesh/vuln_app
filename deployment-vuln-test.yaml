@@ -1,0 +1,147 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vuln-test
+  labels:
+    monitoring: enabled
+    security-scan: enabled
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vuln-app
+  namespace: vuln-test
+  labels:
+    app: vuln-app
+    test: exploitability
+  annotations:
+    github.com/project: "exploitability-test-app"
+    github.com/repo: "https://github.com/test/exploitability-test-app"
+    github.com/commit: "abc123def456"
+    github.com/branch: "main"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vuln-app
+  template:
+    metadata:
+      labels:
+        app: vuln-app
+        version: v1.0.0
+        tier: backend
+    spec:
+      hostNetwork: true
+      hostPID: true
+      
+      containers:
+      - name: vuln-app
+        image: vuln-app:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+          protocol: TCP
+        
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+          privileged: true
+          allowPrivilegeEscalation: true
+          readOnlyRootFilesystem: false
+          capabilities:
+            add:
+              - SYS_ADMIN
+              - NET_ADMIN
+              - SYS_PTRACE
+        
+        env:
+        - name: DATABASE_PASSWORD
+          value: "hardcoded_password_123"
+        - name: API_KEY
+          value: "sk-1234567890abcdef"
+        - name: AWS_ACCESS_KEY_ID
+          value: "AKIAIOSFODNN7EXAMPLE"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        
+        volumeMounts:
+        - name: host-root
+          mountPath: /host
+          readOnly: false
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory
+      
+      serviceAccountName: vuln-app-sa
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vuln-app-sa
+  namespace: vuln-test
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vuln-app-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "secrets", "configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "daemonsets"]
+  verbs: ["get", "list", "watch", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vuln-app-cluster-role-binding
+subjects:
+- kind: ServiceAccount
+  name: vuln-app-sa
+  namespace: vuln-test
+roleRef:
+  kind: ClusterRole
+  name: vuln-app-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vuln-app-svc
+  namespace: vuln-test
+spec:
+  type: LoadBalancer
+  selector:
+    app: vuln-app
+  ports:
+  - port: 80
+    targetPort: 5000
+    protocol: TCP
+    name: http
+
