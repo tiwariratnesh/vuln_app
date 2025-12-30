@@ -1,11 +1,24 @@
-# Vulnerable dependencies with known CVEs
-Flask==2.0.1          # CVE-2023-30861 (cookie parsing)
-Werkzeug==2.0.1       # CVE-2023-25577 (path traversal)
-Jinja2==3.0.1         # CVE-2024-22195 (XSS)
-requests==2.25.1      # CVE-2023-32681 (proxy auth leak)
-PyYAML==5.3.1         # CVE-2020-14343 (arbitrary code execution)
-PyJWT==1.7.1          # CVE-2022-29217 (key confusion)
-cryptography==3.3.2   # CVE-2023-23931 (cipher weakness)
-paramiko==2.7.2       # CVE-2022-24302 (race condition)
-urllib3==1.26.4       # CVE-2023-43804 (cookie leak)
+# DIRECT DEPENDENCIES with REACHABLE CVEs
+Flask==2.0.3             # CVE-2023-30861, USED: app routes
+Werkzeug==2.0.3          # CVE-2023-25577, TRANSITIVE via Flask
+Jinja2==3.0.3            # CVE-2024-22195, TRANSITIVE via Flask
+requests==2.26.0         # CVE-2023-32681, USED: /api/proxy endpoint
+urllib3==1.26.5          # CVE-2021-33503, TRANSITIVE via requests
+certifi==2021.5.30       # CVE-2022-23491, TRANSITIVE via requests
+PyYAML==5.4              # CVE-2020-14343, CVE-2021-4189, USED: /api/config
+PyJWT==1.7.1             # CVE-2022-29217, USED: /api/jwt-decode
+cryptography==3.4.8      # CVE-2023-23931, CVE-2023-38325, USED: /api/encrypt
+paramiko==2.7.2          # CVE-2022-24302, USED: /api/ssh-connect
+bcrypt==3.1.7            # CVE-2024-5569, TRANSITIVE via paramiko
+pynacl==1.4.0            # TRANSITIVE via paramiko
 
+# DIRECT DEPENDENCIES with UNREACHABLE CVEs (imported but not used in reachable code)
+click==7.1.2             # CVE-2023-48055, IMPORTED but unused
+MarkupSafe==2.0.1        # CVE-2024-34069, TRANSITIVE via Jinja2
+itsdangerous==2.0.1      # CVE-2023-46136, TRANSITIVE via Flask
+
+# Additional dependencies for transitive CVE chains
+cffi==1.14.6             # TRANSITIVE via cryptography, bcrypt
+six==1.16.0              # TRANSITIVE via paramiko, bcrypt
+idna==2.10               # CVE-2024-3651, TRANSITIVE via requests
+charset-normalizer==2.0.4  # TRANSITIVE via requests

@@ -1,221 +1,230 @@
 #!/usr/bin/env python3
 """
-Comprehensive Vulnerable Application for Exploitability Testing
-Contains REACHABLE and NON-REACHABLE vulnerabilities across:
-- Code (SAST): SQL Injection, Command Injection, XSS
-- Packages (SCA): CVEs in dependencies
-- Image: Vulnerable base image packages
+Comprehensive Vulnerable Application for SCA Reachability Testing
+Features:
+- REACHABLE CVEs in DIRECT dependencies (Flask, requests, PyJWT, cryptography, paramiko, PyYAML)
+- REACHABLE CVEs in TRANSITIVE dependencies (urllib3, certifi, bcrypt, Werkzeug, Jinja2)
+- UNREACHABLE CVEs in imported but unused packages (click, MarkupSafe, itsdangerous)
 """
-from flask import Flask, request, render_template_string
-import sqlite3
-import os
-import subprocess
-import yaml
-import pickle
+from flask import Flask, request, render_template_string, jsonify
 import requests
 import jwt
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 import paramiko
+import yaml
+import click
+import os
 
 app = Flask(__name__)
 
 # ============================================================================
-# REACHABLE CODE VULNERABILITIES (SAST)
+# REACHABLE ENDPOINTS USING DIRECT VULNERABLE DEPENDENCIES
 # ============================================================================
-
-@app.route('/api/login', methods=['POST'])
-def login_vulnerable():
-    """SQL INJECTION - REACHABLE via POST /api/login"""
-    username = request.form.get('username')
-    password = request.form.get('password')
-    
-    # VULN: SQL Injection (directly concatenating user input)
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
-    cursor.execute(query)
-    user = cursor.fetchone()
-    conn.close()
-    
-    if user:
-        return {"status": "success", "user": user[0]}
-    return {"status": "failed"}, 401
-
-@app.route('/api/search', methods=['GET'])
-def search_vulnerable():
-    """XSS - REACHABLE via GET /api/search?q=<script>"""
-    search_query = request.args.get('q', '')
-    
-    # VULN: Reflected XSS (no sanitization)
-    html = f"""
-    <html>
-        <body>
-            <h1>Search Results for: {search_query}</h1>
-            <p>No results found</p>
-        </body>
-    </html>
-    """
-    return render_template_string(html)
-
-@app.route('/api/exec', methods=['POST'])
-def exec_vulnerable():
-    """COMMAND INJECTION - REACHABLE via POST /api/exec"""
-    command = request.form.get('cmd', 'ls')
-    
-    # VULN: Command Injection (shell=True with user input)
-    try:
-        result = subprocess.check_output(f"echo Result: {command}", shell=True, text=True)
-        return {"output": result}
-    except Exception as e:
-        return {"error": str(e)}, 500
-
-@app.route('/api/config', methods=['POST'])
-def yaml_load_vulnerable():
-    """YAML DESERIALIZATION - REACHABLE via POST /api/config"""
-    config_data = request.data
-    
-    # VULN: Unsafe YAML deserialization (yaml.load without Loader)
-    try:
-        config = yaml.load(config_data, Loader=yaml.Loader)
-        return {"config": str(config)}
-    except Exception as e:
-        return {"error": str(e)}, 500
-
-@app.route('/api/session', methods=['POST'])
-def pickle_vulnerable():
-    """INSECURE DESERIALIZATION - REACHABLE via POST /api/session"""
-    session_data = request.data
-    
-    # VULN: Pickle deserialization (allows code execution)
-    try:
-        session = pickle.loads(session_data)
-        return {"session": str(session)}
-    except Exception as e:
-        return {"error": str(e)}, 500
 
 @app.route('/api/proxy', methods=['GET'])
-def ssrf_vulnerable():
-    """SSRF - REACHABLE via GET /api/proxy?url=http://169.254.169.254/latest/meta-data/"""
-    url = request.args.get('url', '')
-    
-    # VULN: Server-Side Request Forgery (no URL validation)
+def ssrf_endpoint():
+    """REACHABLE: Uses requests (CVE-2023-32681) + urllib3 (CVE-2021-33503) + certifi (CVE-2022-23491)"""
+    url = request.args.get('url', 'https://httpbin.org/get')
     try:
-        response = requests.get(url, timeout=5)
-        return {"content": response.text, "status": response.status_code}
+        response = requests.get(url, timeout=5, verify=True)
+        return jsonify({
+            "status": "success",
+            "url": url,
+            "response_code": response.status_code,
+            "content_length": len(response.text)
+        })
     except Exception as e:
-        return {"error": str(e)}, 500
-
-# ============================================================================
-# NON-REACHABLE CODE VULNERABILITIES (SAST - DEAD CODE)
-# ============================================================================
-
-def admin_backdoor_unreachable(user_input):
-    """PATH TRAVERSAL - NOT REACHABLE (no route calls this)"""
-    # VULN: Path Traversal (but never called)
-    file_path = f"/var/data/{user_input}"
-    with open(file_path, 'r') as f:
-        return f.read()
-
-def debug_shell_unreachable(cmd):
-    """COMMAND INJECTION - NOT REACHABLE (internal debug function)"""
-    # VULN: Command injection (but never exposed via API)
-    return os.system(cmd)
-
-def decrypt_secret_unreachable(encrypted_data):
-    """WEAK CRYPTO - NOT REACHABLE (unused helper)"""
-    # VULN: Hardcoded encryption key (but function never called)
-    key = b'insecure_key_1234567890123456'
-    f = Fernet(key)
-    return f.decrypt(encrypted_data)
-
-# ============================================================================
-# REACHABLE DEPENDENCY VULNERABILITIES (SCA)
-# ============================================================================
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/jwt-decode', methods=['POST'])
-def jwt_decode_vulnerable():
-    """Uses PyJWT with known CVEs - REACHABLE"""
-    token = request.form.get('token', '')
-    
-    # Uses vulnerable PyJWT library
+def jwt_decode():
+    """REACHABLE: Uses PyJWT==1.7.1 (CVE-2022-29217 - Key Confusion Attack)"""
+    token = request.json.get('token', '')
     try:
         decoded = jwt.decode(token, options={"verify_signature": False})
-        return {"payload": decoded}
+        return jsonify({"payload": decoded, "library": "PyJWT==1.7.1"})
     except Exception as e:
-        return {"error": str(e)}, 500
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/api/ssh-connect', methods=['POST'])
-def ssh_vulnerable():
-    """Uses Paramiko with known CVEs - REACHABLE"""
-    host = request.form.get('host', 'localhost')
-    
-    # Uses vulnerable Paramiko library
+@app.route('/api/jwt-encode', methods=['POST'])
+def jwt_encode():
+    """REACHABLE: Creates JWT using vulnerable PyJWT"""
+    payload = request.json.get('payload', {})
+    secret = request.json.get('secret', 'default_secret')
+    try:
+        token = jwt.encode(payload, secret, algorithm='HS256')
+        return jsonify({"token": token, "library": "PyJWT==1.7.1"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/encrypt', methods=['POST'])
+def encrypt_data():
+    """REACHABLE: Uses cryptography==3.4.8 (CVE-2023-23931, CVE-2023-38325)"""
+    data = request.json.get('data', 'test data')
+    try:
+        key = Fernet.generate_key()
+        f = Fernet(key)
+        encrypted = f.encrypt(data.encode())
+        return jsonify({
+            "encrypted": encrypted.decode('latin-1'),
+            "key": key.decode('latin-1'),
+            "library": "cryptography==3.4.8"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/aes-encrypt', methods=['POST'])
+def aes_encrypt():
+    """REACHABLE: Uses cryptography low-level AES cipher"""
+    data = request.json.get('data', 'sensitive data')
+    try:
+        key = os.urandom(32)
+        iv = os.urandom(16)
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        encryptor = cipher.encryptor()
+        padded_data = data.ljust(16)
+        encrypted = encryptor.update(padded_data.encode()) + encryptor.finalize()
+        return jsonify({
+            "encrypted": encrypted.hex(),
+            "library": "cryptography==3.4.8 (AES-CBC)"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/ssh-init', methods=['POST'])
+def ssh_init():
+    """REACHABLE: Uses paramiko==2.7.2 (CVE-2022-24302) + bcrypt (CVE-2024-5569) + pynacl"""
+    host = request.json.get('host', 'example.com')
     try:
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        return {"status": "ssh client initialized"}
+        transport = paramiko.Transport((host, 22))
+        return jsonify({
+            "status": "ssh client initialized",
+            "host": host,
+            "library": "paramiko==2.7.2"
+        })
     except Exception as e:
-        return {"error": str(e)}, 500
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/config', methods=['POST'])
+def yaml_parse():
+    """REACHABLE: Uses PyYAML==5.4 (CVE-2020-14343, CVE-2021-4189)"""
+    yaml_data = request.data.decode('utf-8')
+    try:
+        config = yaml.load(yaml_data, Loader=yaml.FullLoader)
+        return jsonify({
+            "config": str(config),
+            "library": "PyYAML==5.4"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ============================================================================
-# NON-REACHABLE DEPENDENCY VULNERABILITIES (SCA - DEAD CODE)
+# REACHABLE ENDPOINTS USING TRANSITIVE VULNERABLE DEPENDENCIES
 # ============================================================================
+
+@app.route('/api/render', methods=['POST'])
+def render_template():
+    """REACHABLE: Uses Jinja2==3.0.3 (CVE-2024-22195) - TRANSITIVE via Flask"""
+    template_string = request.json.get('template', '<h1>{{ message }}</h1>')
+    message = request.json.get('message', 'Hello World')
+    try:
+        rendered = render_template_string(template_string, message=message)
+        return jsonify({
+            "rendered": rendered,
+            "library": "Jinja2==3.0.3 (transitive via Flask)"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/werkzeug-test', methods=['GET'])
+def werkzeug_test():
+    """REACHABLE: Uses Werkzeug==2.0.3 (CVE-2023-25577) - TRANSITIVE via Flask"""
+    from werkzeug.security import generate_password_hash, check_password_hash
+    password = request.args.get('password', 'test123')
+    try:
+        hashed = generate_password_hash(password)
+        is_valid = check_password_hash(hashed, password)
+        return jsonify({
+            "hashed": hashed,
+            "verified": is_valid,
+            "library": "Werkzeug==2.0.3 (transitive via Flask)"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ============================================================================
+# UNREACHABLE CODE WITH VULNERABLE DEPENDENCIES (DEAD CODE)
+# ============================================================================
+
+def unused_click_command():
+    """UNREACHABLE: Imports click (CVE-2023-48055) but never called"""
+    @click.command()
+    @click.option('--name', default='World')
+    def hello(name):
+        click.echo(f'Hello {name}!')
+    return hello
 
 def unused_crypto_function():
-    """Uses cryptography lib - NOT REACHABLE (never called)"""
-    # Cryptography package might have CVEs, but this function is never used
+    """UNREACHABLE: Uses cryptography but this function is never exposed"""
     key = Fernet.generate_key()
-    return Fernet(key)
+    cipher = Fernet(key)
+    return cipher.encrypt(b"secret data")
 
-def unused_yaml_parser(data):
-    """Uses PyYAML - NOT REACHABLE (duplicate, unused function)"""
-    # PyYAML might have CVEs, but this specific function is never called
+def unused_paramiko_function():
+    """UNREACHABLE: Imports paramiko but never called via any route"""
+    ssh = paramiko.SSHClient()
+    ssh.load_system_host_keys()
+    return ssh
+
+def unused_yaml_function(data):
+    """UNREACHABLE: Uses PyYAML but this specific function never called"""
     return yaml.safe_load(data)
 
 # ============================================================================
-# HEALTH CHECK (SAFE ENDPOINT)
+# SAFE ENDPOINTS
 # ============================================================================
-
-@app.route('/health', methods=['GET'])
-def health():
-    """Health check endpoint - SAFE"""
-    return {"status": "healthy", "version": "1.0.0"}
 
 @app.route('/', methods=['GET'])
 def index():
-    """Index page - SAFE"""
-    return {
-        "app": "Exploitability Test Application",
+    """Index page with API documentation"""
+    return jsonify({
+        "app": "SCA Reachability Test Application",
+        "version": "2.0.0",
+        "purpose": "Test SCA scanner with reachable/unreachable CVEs",
         "endpoints": {
-            "reachable_vulnerable": [
-                "POST /api/login - SQL Injection",
-                "GET /api/search - XSS",
-                "POST /api/exec - Command Injection",
-                "POST /api/config - YAML Deserialization",
-                "POST /api/session - Pickle Deserialization",
-                "GET /api/proxy - SSRF",
-                "POST /api/jwt-decode - Vulnerable JWT lib",
-                "POST /api/ssh-connect - Vulnerable SSH lib"
-            ],
-            "safe": [
-                "GET /health",
-                "GET /"
-            ]
+            "reachable_direct": {
+                "GET /api/proxy": "Uses requests (+ urllib3, certifi transitive)",
+                "POST /api/jwt-decode": "Uses PyJWT",
+                "POST /api/jwt-encode": "Uses PyJWT",
+                "POST /api/encrypt": "Uses cryptography",
+                "POST /api/aes-encrypt": "Uses cryptography (AES)",
+                "POST /api/ssh-init": "Uses paramiko (+ bcrypt, pynacl transitive)",
+                "POST /api/config": "Uses PyYAML"
+            },
+            "reachable_transitive": {
+                "POST /api/render": "Uses Jinja2 (transitive via Flask)",
+                "GET /api/werkzeug-test": "Uses Werkzeug (transitive via Flask)"
+            },
+            "safe": {
+                "GET /": "This page",
+                "GET /health": "Health check"
+            }
         },
-        "note": "This app contains intentional vulnerabilities for testing"
-    }
+        "dependencies": {
+            "direct_reachable": ["Flask", "requests", "PyJWT", "cryptography", "paramiko", "PyYAML"],
+            "transitive_reachable": ["urllib3", "certifi", "Werkzeug", "Jinja2", "bcrypt", "pynacl"],
+            "unreachable": ["click", "MarkupSafe", "itsdangerous"]
+        }
+    })
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check endpoint"""
+    return jsonify({"status": "healthy", "version": "2.0.0"})
 
 if __name__ == '__main__':
-    # Initialize database
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS users 
-                     (username TEXT, password TEXT, role TEXT)''')
-    cursor.execute("INSERT OR IGNORE INTO users VALUES ('admin', 'admin123', 'admin')")
-    cursor.execute("INSERT OR IGNORE INTO users VALUES ('user', 'pass123', 'user')")
-    conn.commit()
-    conn.close()
-    
-    # Run app
     app.run(host='0.0.0.0', port=5000, debug=False)
-

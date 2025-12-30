@@ -1,144 +1,60 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: exploit-test
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vuln-app
-  namespace: exploit-test
+  name: vuln-app-sca-test
+  namespace: raksha
   labels:
-    app: vuln-app
-    test: exploitability
+    app: vuln-app-sca-test
+    test: sca-reachability
   annotations:
-    github.com/project: "exploitability-test-app"
-    github.com/repo: "https://github.com/test/exploitability-test-app"
+    ai-spm.io/code-repo: "https://github.com/tiwariratnesh/vuln_app"
+    ai-spm.io/code-branch: "main"
+    ai-spm.io/code-path: "/"
+    ai-spm.io/commit-sha: "sca-reachability-test"
+    description: "Test app with reachable/unreachable CVEs in direct and transitive dependencies"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: vuln-app
+      app: vuln-app-sca-test
   template:
     metadata:
       labels:
-        app: vuln-app
-        version: v1.0.0
+        app: vuln-app-sca-test
+      annotations:
+        ai-spm.io/code-repo: "https://github.com/tiwariratnesh/vuln_app"
+        ai-spm.io/code-branch: "main"
+        ai-spm.io/code-path: "/"
+        ai-spm.io/commit-sha: "sca-reachability-test"
     spec:
-      # SECURITY MISCONFIGURATIONS FOR TESTING
-      hostNetwork: true      # Enables container escape potential
-      hostPID: true          # Access to host processes
-      
       containers:
-      - name: vuln-app
-        image: vuln-app:latest
+      - name: app
+        image: vuln-app-sca-test:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 5000
-          protocol: TCP
-        
-        # VULNERABLE SECURITY CONTEXT
-        securityContext:
-          runAsUser: 0                      # Running as root
-          runAsGroup: 0
-          privileged: true                  # Full privileges
-          allowPrivilegeEscalation: true
-          readOnlyRootFilesystem: false
-          capabilities:
-            add:
-              - SYS_ADMIN                   # Dangerous capability
-              - NET_ADMIN
-              - SYS_PTRACE
-        
-        # SENSITIVE ENVIRONMENT VARIABLES
         env:
-        - name: DATABASE_PASSWORD
-          value: "hardcoded_password_123"
-        - name: API_KEY
-          value: "sk-1234567890abcdef"
-        - name: AWS_ACCESS_KEY_ID
-          value: "AKIAIOSFODNN7EXAMPLE"
-        - name: AWS_SECRET_ACCESS_KEY
-          value: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-        
-        # VOLUME MOUNTS (host paths)
-        volumeMounts:
-        - name: host-root
-          mountPath: /host
-          readOnly: false
-        
+        - name: APP_VERSION
+          value: "2.0.0"
         resources:
           requests:
             memory: "128Mi"
-            cpu: "100m"
+            cpu: "200m"
           limits:
             memory: "256Mi"
-            cpu: "200m"
-        
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 5000
-          initialDelaySeconds: 10
-          periodSeconds: 10
-        
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 5000
-          initialDelaySeconds: 5
-          periodSeconds: 5
-      
-      volumes:
-      - name: host-root
-        hostPath:
-          path: /
-          type: Directory
-      
-      serviceAccountName: vuln-app-sa
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: vuln-app-sa
-  namespace: exploit-test
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: vuln-app-cluster-role
-rules:
-- apiGroups: [""]
-  resources: ["pods", "services", "secrets", "configmaps"]
-  verbs: ["get", "list", "watch", "create", "update", "delete"]
-- apiGroups: ["apps"]
-  resources: ["deployments", "daemonsets"]
-  verbs: ["get", "list", "watch", "create"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: vuln-app-cluster-role-binding
-subjects:
-- kind: ServiceAccount
-  name: vuln-app-sa
-  namespace: exploit-test
-roleRef:
-  kind: ClusterRole
-  name: vuln-app-cluster-role
-  apiGroup: rbac.authorization.k8s.io
+            cpu: "400m"
+      restartPolicy: Always
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: vuln-app
-  namespace: exploit-test
+  name: vuln-app-sca-test
+  namespace: raksha
 spec:
-  type: LoadBalancer  # Publicly exposed
   selector:
-    app: vuln-app
+    app: vuln-app-sca-test
   ports:
-  - port: 80
-    targetPort: 5000
-    protocol: TCP
-    name: http
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+  type: ClusterIP
