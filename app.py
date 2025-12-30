@@ -4,7 +4,7 @@ Comprehensive Vulnerable Application for SCA Reachability Testing
 Features:
 - REACHABLE CVEs in DIRECT dependencies (Flask, requests, PyJWT, cryptography, paramiko, PyYAML)
 - REACHABLE CVEs in TRANSITIVE dependencies (urllib3, certifi, bcrypt, Werkzeug, Jinja2)
-- UNREACHABLE CVEs in imported but unused packages (click, MarkupSafe, itsdangerous)
+- UNREACHABLE CVEs in imported but unused packages (PIL, lxml, pickle5)
 """
 from flask import Flask, request, render_template_string, jsonify
 import requests
@@ -14,8 +14,16 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import paramiko
 import yaml
-import click
 import os
+
+# UNREACHABLE IMPORTS - These packages have CVEs but are NEVER called in any code path
+try:
+    from PIL import Image  # pillow 8.3.2 - has CVEs but NEVER used
+    import lxml.etree      # lxml 4.6.3 - has CVEs but NEVER used
+    import pickle5         # pickle5 - has CVEs but NEVER used
+    UNUSED_IMPORTS = True  # Just to prevent linter warnings
+except ImportError:
+    pass
 
 app = Flask(__name__)
 
