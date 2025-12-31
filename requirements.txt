@@ -1,45 +1,8 @@
-# ===================================================================
-# REACHABLE VULNERABILITIES - Actively used in code
-# ===================================================================
-
-# Flask web framework - USED for all routes
-Flask==2.0.3             # GHSA-m2qf-hxjv-5gpq, PYSEC-2023-62
-Werkzeug==2.0.3          # CVE-2023-25577 (transitive via Flask)
-Jinja2==3.0.3            # CVE-2024-22195 (transitive via Flask)
-click==8.0.3             # Transitive via Flask (CLI commands)
-
-# HTTP client - USED in /api/proxy endpoint
-requests==2.26.0         # CVE-2023-32681, CVE-2024-35195
-urllib3==1.26.5          # CVE-2021-33503, CVE-2023-43804, CVE-2023-45803
-certifi==2021.5.30       # CVE-2022-23491, CVE-2024-39689
-idna==2.10               # CVE-2024-3651 (transitive via requests)
-charset-normalizer==2.0.4  # Transitive via requests
-
-# JWT authentication - USED in /api/jwt-decode and /api/jwt-encode
-PyJWT==1.7.1             # GHSA-ffqj-6fqr-9h24, PYSEC-2022-202 (Key confusion)
-
-# Cryptography - USED in /api/encrypt and /api/aes-encrypt
-cryptography==3.4.8      # CVE-2023-23931, CVE-2023-49083, CVE-2024-0727
-cffi==1.14.6             # Transitive via cryptography
-
-# SSH client - USED in /api/ssh-init
-paramiko==2.7.2          # CVE-2022-24302 (race condition)
-bcrypt==3.1.7            # CVE-2024-5569 (transitive via paramiko)
-pynacl==1.4.0            # Transitive via paramiko
-
-# YAML parser - USED in /api/config
-PyYAML==5.3.1            # CVE-2020-14343 (code execution) - older vulnerable version!
-
-# ===================================================================
-# UNREACHABLE VULNERABILITIES - Imported but NOT used in code paths
-# ===================================================================
-
-# Serialization library - IMPORTED but never called
-pickle5==0.0.11          # Intentionally vulnerable, but NOT used
-
-# Old vulnerable packages - IMPORTED but no code actually calls them
-pillow==8.3.2            # CVE-2021-34552, CVE-2022-22817 - IMPORTED but unused
-lxml==4.6.3              # CVE-2021-43818, CVE-2022-2309 - IMPORTED but unused
-
-# Dependencies that get installed but never imported
-six==1.16.0              # Transitive via multiple packages
+Flask==2.0.3
+requests==2.26.0
+cryptography==3.4.8
+paramiko==2.7.2
+pillow==8.3.2
+PyYAML==5.3.1
+lxml==4.6.3
+PyJWT==1.7.1
